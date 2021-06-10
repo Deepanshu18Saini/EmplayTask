@@ -1,0 +1,71 @@
+#Set the aws profile in th env
+provider "aws" {
+  profile = "pro"
+  region = "ap-southeast-2"
+}
+
+#creating security group
+resource "aws_security_group" "ssh-http" {
+  name        = "ssh-http"
+  description = "allow ssh and http traffic"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+}
+
+#creating aws instance
+resource "aws_instance" "webserver" {
+  ami               = "ami-5b673c34"
+  instance_type     = "t2.micro"
+  availability_zone = "ap-southeast-2"
+  security_groups   = ["${aws_security_group.ssh-http.name}"]
+  key_name = "zoomkey"
+  user_data = <<-EOF
+                #! /bin/bash
+                sudo yum install httpd -y
+                sudo systemctl start httpd
+                sudo systemctl enable httpd
+                echo "<h1>webserver" | sudo tee  /var/www/html/index.html
+  EOF
+
+
+  tags = {
+        Name = "webserver"
+  }
+
+}
+
+#creating  ebs volume
+
+resource "aws_ebs_volume" "data-vol" {
+ availability_zone = "ap-southeast-2"
+ size = 1
+ tags = {
+        Name = "data-volume"
+ }
+
+}
+#attaching ebs volume
+resource "aws_volume_attachment" "webserver-vol" {
+ device_name = "/data"
+ volume_id = "${aws_ebs_volume.data-vol.id}"
+ instance_id = "${aws_instance.webserver.id}"
+}
